@@ -10,21 +10,22 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
 using System.Windows.Shapes;
 
 namespace RMDesktopUI.Views
 {
     /// <summary>
-    /// Interaction logic for ShellView.xaml
+    /// Interaction logic for SalesView.xaml
     /// </summary>
-    public partial class ShellView : Window
+    public partial class SalesView : UserControl
     {
-        public ShellView()
+        public SalesView()
         {
             InitializeComponent();
         }
 
-        private void MenuItem_Click(object sender, RoutedEventArgs e)
+        private void Products_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
 
         }
