@@ -14,5 +14,6 @@ namespace RMDesktopUI.Library.Models
         string LastName { get; set; }
         string EmailAddress { get; set; }
         DateTime CreatedDate { get; set; }
+        void ResetUserModel();
     }
 }

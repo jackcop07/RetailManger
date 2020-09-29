@@ -4,10 +4,12 @@ using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using AutoMapper;
 using Caliburn.Micro;
 using RMDesktopUI.Library.Api;
 using RMDesktopUI.Library.Helpers;
 using RMDesktopUI.Library.Models;
+using RMDesktopUI.Models;
 
 namespace RMDesktopUI.ViewModels
 {
@@ -15,19 +17,24 @@ namespace RMDesktopUI.ViewModels
     {
         IProductEndpoint _productEndpoint;
         private readonly IConfigHelper _configHelper;
+        private readonly ISaleEndpoint _saleEndpoint;
+        private readonly IMapper _mapper;
 
-        public SalesViewModel(IProductEndpoint productEndpoint, IConfigHelper configHelper)
+        public SalesViewModel(IProductEndpoint productEndpoint, IConfigHelper configHelper, ISaleEndpoint saleEndpoint, IMapper mapper)
         {
             _productEndpoint = productEndpoint;
             _configHelper = configHelper;
+            _saleEndpoint = saleEndpoint;
+            _mapper = mapper;
         }
 
-        private BindingList<ProductModel> _products;
+        private BindingList<ProductDisplayModel> _products;
 
         private async Task LoadProducts()
         {
             var productList = await _productEndpoint.GetAll();
-            Products = new BindingList<ProductModel>(productList);
+            var products = _mapper.Map<List<ProductDisplayModel>>(productList);
+            Products = new BindingList<ProductDisplayModel>(products);
         }
 
         protected override async void OnViewLoaded(object view)
@@ -36,7 +43,7 @@ namespace RMDesktopUI.ViewModels
             await LoadProducts();
         }
 
-        public BindingList<ProductModel> Products
+        public BindingList<ProductDisplayModel> Products
         {
             get { return _products; }
             set
@@ -46,9 +53,9 @@ namespace RMDesktopUI.ViewModels
             }
         }
 
-        private ProductModel _selectedProduct;
+        private ProductDisplayModel _selectedProduct;
 
-        public ProductModel SelectedProduct
+        public ProductDisplayModel SelectedProduct
         {
             get { return _selectedProduct; }
             set
@@ -86,17 +93,15 @@ namespace RMDesktopUI.ViewModels
 
         public void AddToCart()
         {
-            CartItemModel existingItem = Cart.FirstOrDefault(x => x.Product == SelectedProduct);
+            CartItemDisplayModel existingItem = Cart.FirstOrDefault(x => x.Product == SelectedProduct);
 
             if (existingItem != null)
             {
                 existingItem.QuantityInCart += ItemQuantity;
-                Cart.Remove(existingItem);
-                Cart.Add(existingItem);
             }
             else
             {
-                CartItemModel item = new CartItemModel
+                CartItemDisplayModel item = new CartItemDisplayModel
                 {
                     Product = SelectedProduct,
                     QuantityInCart = ItemQuantity
@@ -110,6 +115,7 @@ namespace RMDesktopUI.ViewModels
             NotifyOfPropertyChange(() => SubTotal);
             NotifyOfPropertyChange(() => Tax);
             NotifyOfPropertyChange(() => Total);
+            NotifyOfPropertyChange(() => CanCheckOut);
         }
 
 
@@ -117,9 +123,7 @@ namespace RMDesktopUI.ViewModels
         {
             get
             {
-                bool output = false;
-
-                //Make sure there is an item selected
+                bool output = SelectedCartItem != null && SelectedCartItem.QuantityInCart > 0;
 
                 return output;
             }
@@ -127,15 +131,27 @@ namespace RMDesktopUI.ViewModels
 
         public void RemoveFromCart()
         {
-            SelectedProduct.QuantityInStock += ItemQuantity;
+            SelectedCartItem.Product.QuantityInStock += 1;
+
+            if (SelectedCartItem.QuantityInCart > 1)
+            {
+                SelectedCartItem.QuantityInCart -= 1;
+            }
+            else
+            {
+                Cart.Remove(SelectedCartItem);
+            }
+
             NotifyOfPropertyChange(() => SubTotal);
             NotifyOfPropertyChange(() => Tax);
             NotifyOfPropertyChange(() => Total);
+            NotifyOfPropertyChange(() => CanCheckOut);
+            NotifyOfPropertyChange(() => CanAddToCart);
         }
 
-        private BindingList<CartItemModel> _cart = new BindingList<CartItemModel>();
+        private BindingList<CartItemDisplayModel> _cart = new BindingList<CartItemDisplayModel>();
 
-        public BindingList<CartItemModel> Cart
+        public BindingList<CartItemDisplayModel> Cart
         {
             get { return _cart; }
             set
@@ -162,35 +178,55 @@ namespace RMDesktopUI.ViewModels
 
         private decimal CalculateTax()
         {
-            decimal taxAmount = 0;
             decimal taxRate = _configHelper.GetTaxRate();
-            foreach (var item in Cart)
-            {
-                if (item.Product.IsTaxable == true)
-                {
-                    taxAmount += ((item.Product.RetailPrice * item.QuantityInCart) * taxRate);
-                }
 
-            }
-            return taxAmount;
+            return Cart.Where(item => item.Product.IsTaxable == true).Sum(item => ((item.Product.RetailPrice * item.QuantityInCart) * taxRate));
         }
         public string Tax => CalculateTax().ToString("C");
 
-        public bool CanCheckOut
+        public bool CanCheckOut => Cart.Count > 0;
+
+        public async Task Checkout()
         {
-            get
+            //Create SaleModel and post to API
+            var sale = new SaleModel();
+            foreach (var item in Cart)
             {
-                bool output = false;
+                sale.SaleDetails.Add(new SaleDetailModel
+                {
+                    ProductId = item.Product.Id,
+                    Quantity = item.QuantityInCart
+                });
+            }
+            await _saleEndpoint.PostSale(sale);
 
-                //Make sure there is an item in the cart
+            await ResetSalesViewModel();
+        }
 
-                return output;
+        private async Task ResetSalesViewModel()
+        {
+            Cart = new BindingList<CartItemDisplayModel>();
+            await LoadProducts();
+            ItemQuantity = 1;
+            NotifyOfPropertyChange(() => SubTotal);
+            NotifyOfPropertyChange(() => Tax);
+            NotifyOfPropertyChange(() => Total);
+            NotifyOfPropertyChange(() => CanCheckOut);
+        }
+
+
+        private CartItemDisplayModel _selectedCartItem;
+
+        public CartItemDisplayModel SelectedCartItem
+        {
+            get { return _selectedCartItem; }
+            set
+            {
+                _selectedCartItem = value;
+                NotifyOfPropertyChange(() => SelectedCartItem);
+                NotifyOfPropertyChange(() => CanRemoveFromCart);
             }
         }
 
-        public void Checkout()
-        {
-
-        }
     }
 }
