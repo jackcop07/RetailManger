@@ -51,5 +51,11 @@ namespace RMDesktopUI.ViewModels
         private int _isLoggedIn;
 
         public bool IsLoggedIn => !string.IsNullOrWhiteSpace(_user.Token);
+
+
+        public void UserManagement()
+        {
+            ActivateItem(IoC.Get<UserDisplayViewModel>());
+        }
     }
 }

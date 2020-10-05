@@ -9,7 +9,7 @@ using RMDataManager.Library.Models;
 
 namespace RMDataManager.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Cashier,Manager,Admin")]
     [RoutePrefix("api/Product")]
     public class ProductController : ApiController
     {
